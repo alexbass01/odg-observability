@@ -12,3 +12,7 @@ dependencies:
     version: 3.9.0
     repository: https://opensearch-project.github.io/helm-charts
     condition: opensearch.enabled              # off by default — prod sets it off, kind sets it on
+  - name: opensearch-dashboards
+    version: 3.9.0
+    repository: https://opensearch-project.github.io/helm-charts
+    condition: opensearch-dashboards.enabled   # on for kind; off for prod

@@ -53,6 +53,35 @@ opensearch:
           key: opensearch-password
           optional: true    # tolerable on first render; btp path doesn't need it
 
+## Sub-chart: opensearch-dashboards — visualization UI (kind-only)
+opensearch-dashboards:
+  # Enabled when: opensearch.enabled=true (local storage available).
+  # Prod sets both opensearch.enabled=false AND leaves this off.
+  enabled: true
+  # Chart reaches in-cluster opensearch via service name (fixed: opensearch-cluster-master)
+  opensearchHosts: "https://opensearch-cluster-master:9200"
+  # Admin credentials come from the same secret that the main opensearch instance uses
+  extraEnvs:
+    - name: OPENSEARCH_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: telemetry-opensearch-credentials
+          key: opensearch-username
+          optional: true
+    - name: OPENSEARCH_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: telemetry-opensearch-credentials
+          key: opensearch-password
+          optional: true
+  # Self-signed cert on local opensearch requires this
+  config:
+    opensearch_dashboards.yml: |
+      opensearch.ssl.verificationMode: none
+  resources:
+    requests: { memory: 512Mi, cpu: 100m }
+    limits:   { memory: 1Gi }
+
 ## Sub-chart: opentelemetry-collector (upstream)
 opentelemetry-collector:
   mode: daemonset

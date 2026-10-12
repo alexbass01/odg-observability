@@ -1,0 +1,8 @@
+# Build artifacts from 'helm dependency build' - regenerate via Chart.yaml
+charts/*/charts/
+
+# Helm package tars
+*.tgz
+
+# Values backups
+.local-values
