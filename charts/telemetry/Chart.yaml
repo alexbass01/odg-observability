@@ -1,0 +1,14 @@
+apiVersion: v2
+name: telemetry
+description: ODG telemetry collector — filelog/k8sattributes/filter for annotated pods
+type: application
+version: 0.1.0
+appVersion: "0.161.0"
+dependencies:
+  - name: opentelemetry-collector
+    version: 0.175.1
+    repository: https://open-telemetry.github.io/opentelemetry-helm-charts
+  - name: opensearch
+    version: 3.9.0
+    repository: https://opensearch-project.github.io/helm-charts
+    condition: opensearch.enabled              # off by default — prod sets it off, kind sets it on

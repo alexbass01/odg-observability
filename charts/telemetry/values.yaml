@@ -1,0 +1,106 @@
+## Top-level knobs
+
+# Backend switch: "opensearch" (local kind) | "btp" (production)
+backend: opensearch
+
+# What namespace to observe (filelog reads /var/log/pods/; k8sattributes scopes API watch)
+# Set in instance values: odg (kind), tenant-namespace (workload clusters)
+observedNamespace: odg
+
+# Debug exporter log verbosity ("basic" / "detailed" / "normal" / "summary")
+debug:
+  verbosity: basic
+
+# The annotation gate — pods carrying otel.io/pod-logs: "true" emit logs
+annotationKey: otel.io/pod-logs
+
+opensearch:
+  instanceEndpoint: http://opensearch:9200   # override at deploy time
+  logsIndex: logs-otel-v1
+
+btp:
+  endpoint: ""                               # set when backend=btp; e.g. https://x.cls.cloud.sap:4317
+  # Secret with mTLS certs (ca.crt, tls.crt, tls.key) already on workload cluster
+  # from provider's onboarding template
+  certsSecret: ""                            # set when backend=btp
+
+# OpenSearch subchart — local storage, dev only.
+# backend=opensearch + opensearch.enabled=true  → in-cluster storage; exporter targets the subchart svc
+# backend=opensearch + opensearch.enabled=false → exporter targets opensearch.instanceEndpoint (external)
+# backend=btp         + opensearch.enabled=false → exporter targets BTP Cloud Logging
+opensearch:
+  enabled: true             # default ON in chart; prod explicitly sets enabled=false
+  singleNode: true
+  replicas: 1
+  persistence:
+    enabled: false          # ephemeral for kind; override for any persistence
+  resources:
+    requests: { memory: 1Gi, cpu: 500m }
+    limits:   { memory: 2Gi }
+  # upstream chart needs cluster manager role for multi-node; single-node works without
+  clusterManager:
+    enabled: false
+  sysctlInit:
+    enabled: false          # kind nodes don't allow sysctl tweaks; opensearch will warn but boot
+  # Kind lab: password comes from a k8s Secret at deploy time, not values.
+  # The local-setup script creates 'telemetry-opensearch-credentials' in the release
+  # namespace with opensearch-username/opensearch-password keys. Never in git.
+  extraEnvs:
+    - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: telemetry-opensearch-credentials
+          key: opensearch-password
+          optional: true    # tolerable on first render; btp path doesn't need it
+
+## Sub-chart: opentelemetry-collector (upstream)
+opentelemetry-collector:
+  mode: daemonset
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    # appVersion above pins collector 0.161.0
+  # BTP: cert volumes to mount when backend=btp (also set btp.certsSecret at deploy);
+  # kind/opensearch path leaves these empty.
+  extraVolumes: []
+  extraVolumeMounts: []
+  # Preset handles: filelog receiver setup, hostPath mounts for /var/log/pods,
+  # checkpoints, RBAC. We override receivers/processors via config instead.
+  presets:
+    logsCollection:
+      enabled: true
+      includeCollectorLogs: false    # don't ingest the collector's own logs
+      storeCheckpoints: false        # kind lab: ephemeral; flip for prod durability
+  # Pass OpenSearch admin credentials into the collector — the basic auth extension
+  # in templates/collector-config.yaml uses ${env:OPENSEARCH_PASSWORD}.
+  extraEnvs:
+    - name: OPENSEARCH_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: telemetry-opensearch-credentials
+          key: opensearch-password
+          optional: true   # tolerated when backend=btp (no such secret expected)
+  # Use our templated ConfigMap (templates/collector-config.yaml) instead of
+  # values.yaml's static config block — we need namespace endpoint interpolation
+  configMap:
+    create: false
+    existingName: telemetry-override
+  
+  # Upstream: clusterRole is top-level; the preset-driven RBAC entries
+  # come from the chart itself. We add k8sattributes-required rules.
+  clusterRole:
+    create: true
+    rules:
+      - apiGroups: [""]
+        resources: [pods, namespaces]
+        verbs: [get, list, watch]
+
+  config:
+    # placeholder — the DaemonSet spec mounts the override ConfigMap above.
+    # Values.schema validation requires at least the health_check extension here.
+    # stretch: presets.logsCollection adds filelog receiver config, mounts, RBAC;
+    # our override ConfigMap applies the annotation filter on top.
+    extensions:
+      health_check: {}
+    service:
+      extensions: [health_check]
+      pipelines: {}

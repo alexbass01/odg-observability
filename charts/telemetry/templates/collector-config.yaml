@@ -1,0 +1,137 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opentelemetry-collector.fullname" . }}-override
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "opentelemetry-collector.labels" . | nindent 4 }}
+data:
+  relay: |
+    extensions:
+      health_check:
+        endpoint: ${env:MY_POD_IP}:13133
+      {{- if and (eq .Values.backend "opensearch") .Values.opensearch.enabled }}
+      basicauth/opensearch:
+        client_auth:
+          username: admin
+          password: ${env:OPENSEARCH_PASSWORD}
+      {{- end }}
+
+    receivers:
+      filelog:
+        include:
+          - /var/log/pods/{{ .Values.observedNamespace }}_*/*/*.log
+        start_at: end
+        include_file_path: true   # required so container-parser's add_metadata_from_filepath works
+        operators:
+          - id: container-parser
+            type: container
+            add_metadata_from_filepath: true
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+
+    processors:
+      k8sattributes:
+        auth_type: serviceAccount
+        filter:
+          namespace: {{ .Values.observedNamespace | quote }}
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.uid
+        extract:
+          metadata:
+            - k8s.namespace.name
+            - k8s.pod.name
+            - k8s.deployment.name
+            - k8s.container.name
+          annotations:
+            - key: {{ .Values.annotationKey | quote }}
+              from: pod
+
+      filter/only_annotated:
+        error_mode: ignore
+        logs:
+          log_record:
+            # k8sattributes prefixes annotation keys with "k8s.pod.annotation."
+            - 'resource.attributes["k8s.pod.annotation.{{ .Values.annotationKey }}"] != "true"'
+
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+        spike_limit_mib: 128
+
+    exporters:
+      debug:
+        verbosity: {{ .Values.debug.verbosity | default "basic" }}
+      {{- if and (eq .Values.backend "opensearch") .Values.opensearch.enabled }}
+      opensearch:
+        http:
+          # Subchart svc name is static: opensearch-cluster-master (upstream chart
+          # doesn't prepend .Release.Name). Namespace matches ours.
+          endpoint: "https://opensearch-cluster-master.{{ .Release.Namespace }}:9200"
+          auth:
+            authenticator: basicauth/opensearch
+          tls:
+            insecure_skip_verify: true   # kind lab: self-signed cert from opensearch subchart
+        logs_index: {{ .Values.opensearch.logsIndex | quote }}
+      {{- else if eq .Values.backend "opensearch" }}
+      opensearch:
+        http:
+          endpoint: {{ .Values.opensearch.instanceEndpoint | quote }}
+        logs_index: {{ .Values.opensearch.logsIndex | quote }}
+      {{- end }}
+      {{- if and (eq .Values.backend "btp") .Values.btp.certsSecret }}
+      otlp/btp:
+        endpoint: {{ .Values.btp.endpoint | quote }}
+        tls:
+          ca_file: /etc/ssl/certs/btp/ca.crt
+          cert_file: /etc/ssl/certs/btp/tls.crt
+          key_file: /etc/ssl/certs/btp/tls.key
+      {{- end }}
+
+    service:
+      extensions:
+        - health_check
+        {{- if and (eq .Values.backend "opensearch") .Values.opensearch.enabled }}
+        - basicauth/opensearch
+        {{- end }}
+      telemetry:
+        metrics:
+          level: basic
+      pipelines:
+        logs:
+          receivers: [filelog, otlp]
+          processors: [memory_limiter, k8sattributes, filter/only_annotated, batch]
+          exporters:
+            {{- if eq .Values.backend "opensearch" }}
+            - opensearch
+            {{- else }}
+            - otlp/btp
+            {{- end }}
+            - debug
+
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters:
+            {{- if eq .Values.backend "opensearch" }}
+            - opensearch
+            {{- else }}
+            - otlp/btp
+            {{- end }}
+            - debug
+
+        # No metrics storage (opensearch exporter can't, BTP's OTLP metrics not
+        # tested yet). Debug only for the local lab as in compose.collector.yml.
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
