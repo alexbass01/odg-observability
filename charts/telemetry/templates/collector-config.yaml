@@ -87,11 +87,23 @@ data:
           tls:
             insecure_skip_verify: true   # kind lab: self-signed cert from opensearch subchart
         logs_index: {{ .Values.opensearch.logsIndex | quote }}
+      opensearch/traces:
+        http:
+          endpoint: "https://opensearch-cluster-master.{{ .Release.Namespace }}:9200"
+          auth:
+            authenticator: basicauth/opensearch
+          tls:
+            insecure_skip_verify: true
+        traces_index: {{ .Values.opensearch.tracesIndex | default "traces-otel-v1" | quote }}
       {{- else if eq .Values.backend "opensearch" }}
       opensearch:
         http:
           endpoint: {{ .Values.opensearch.instanceEndpoint | quote }}
         logs_index: {{ .Values.opensearch.logsIndex | quote }}
+      opensearch/traces:
+        http:
+          endpoint: {{ .Values.opensearch.instanceEndpoint | quote }}
+        traces_index: {{ .Values.opensearch.tracesIndex | default "traces-otel-v1" | quote }}
       {{- end }}
       {{- if and (eq .Values.backend "btp") .Values.btp.certsSecret }}
       otlp/btp:
@@ -113,7 +125,10 @@ data:
           level: basic
       pipelines:
         logs:
-          receivers: [filelog, otlp]
+          # filelog only — OTLP logs from non-pod sources (e.g. local dev apps)
+          # have no k8s annotation and would be dropped by filter/only_annotated
+          # anyway, so don't accept them here at all
+          receivers: [filelog]
           processors: [memory_limiter, k8sattributes, filter/only_annotated, batch]
           exporters:
             {{- if eq .Values.backend "opensearch" }}
@@ -127,8 +142,10 @@ data:
           receivers: [otlp]
           processors: [memory_limiter, batch]
           exporters:
-            {{- if eq .Values.backend "opensearch" }}
-            - opensearch
+            {{- if and (eq .Values.backend "opensearch") .Values.opensearch.enabled }}
+            - opensearch/traces
+            {{- else if eq .Values.backend "opensearch" }}
+            - opensearch/traces
             {{- else }}
             - otlp/btp
             {{- end }}

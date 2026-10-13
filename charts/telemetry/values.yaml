@@ -17,6 +17,7 @@ annotationKey: otel.io/pod-logs
 opensearch:
   instanceEndpoint: http://opensearch:9200   # override at deploy time
   logsIndex: logs-otel-v1
+  tracesIndex: traces-otel-v1
 
 btp:
   endpoint: ""                               # set when backend=btp; e.g. https://x.cls.cloud.sap:4317
@@ -113,6 +114,12 @@ opentelemetry-collector:
   configMap:
     create: false
     existingName: telemetry-override
+
+  # Expose OTLP receiver endpoints (4317 grpc / 4318 http) via a Service — even in
+  # daemonset mode. Lab apps on the host (app.py) port-forward to this. Without
+  # service.enabled, the agent is unreachable from outside the pod network.
+  service:
+    enabled: true
   
   # Upstream: clusterRole is top-level; the preset-driven RBAC entries
   # come from the chart itself. We add k8sattributes-required rules.
