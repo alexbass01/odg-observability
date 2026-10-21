@@ -81,3 +81,6 @@ jobs:
           attribute: prometheus-config-reloader.image.repository
         - ref: ocm-resource:prometheus-config-reloader.tag
           attribute: prometheus-config-reloader.image.tag
+
+
+  ## Add telemetry + Matrix like at odg-core

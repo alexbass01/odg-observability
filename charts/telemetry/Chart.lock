@@ -2,11 +2,8 @@ dependencies:
 - name: opentelemetry-collector
   repository: https://open-telemetry.github.io/opentelemetry-helm-charts
   version: 0.175.1
-- name: opensearch
-  repository: https://opensearch-project.github.io/helm-charts
-  version: 3.9.0
-- name: opensearch-dashboards
-  repository: https://opensearch-project.github.io/helm-charts
-  version: 3.9.0
-digest: sha256:1a9b729cbe6f0039e81fd9d24def3d88a1c35f577d118b9b571241e5380cbf40
-generated: "2026-10-12T15:36:42.942084+02:00"
+- name: metrics-operator
+  repository: oci://ghcr.io/openmcp-project/charts
+  version: v1.2.1
+digest: sha256:e53ddfab3630f74debee0b87e76bb0a5d7bde4ad25f2e818c5cb72175922002f
+generated: "2026-10-21T08:04:32.012498+02:00"

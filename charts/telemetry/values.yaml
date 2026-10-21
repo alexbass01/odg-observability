@@ -1,142 +1,149 @@
-## Top-level knobs
+## ─── Signals & scope ────────────────────────────────────────────────────────
 
-# Backend switch: "opensearch" (local kind) | "btp" (production)
-backend: opensearch
+# Namespace whose pods are observed (filelog include glob + k8sattributes watch scope)
+# and where the metrics-operator Metric CRs are installed.
+observedNamespace: odg-system
 
-# What namespace to observe (filelog reads /var/log/pods/; k8sattributes scopes API watch)
-# Set in instance values: odg (kind), tenant-namespace (workload clusters)
-observedNamespace: odg
-
-# Debug exporter log verbosity ("basic" / "detailed" / "normal" / "summary")
-debug:
-  verbosity: basic
-
-# The annotation gate — pods carrying otel.io/pod-logs: "true" emit logs
+# Annotation gate: only pods with this pod-annotation = "true" emit logs.
+# Set to "" to ship ALL logs in observedNamespace (dev mode).
 annotationKey: otel.io/pod-logs
 
+# Host metrics (node cpu/mem utilization, 30s) and the prometheus scrape endpoint
+# on :8889 (metrics-operator gauges + hostmetrics) are always on — cheap, and more
+# metric sources will land here later.
+
+## ─── Push backend ───────────────────────────────────────────────────────────
+# Where logs/traces (and for btp, also metrics) are PUSHED. One of:
+#   debug      — only the debug exporter. No push. Metrics still on :8889.
+#   opensearch — OpenSearch REST ingestion (any reachable instance, no TLS).
+#   btp        — SAP Cloud Logging over OTLP gRPC :443 with mTLS certs from a k8s Secret.
+backend: debug
+
 opensearch:
-  instanceEndpoint: http://opensearch:9200   # override at deploy time
+  endpoint: ""                # e.g. http://host.docker.internal:9200
   logsIndex: logs-otel-v1
   tracesIndex: traces-otel-v1
 
 btp:
-  endpoint: ""                               # set when backend=btp; e.g. https://x.cls.cloud.sap:4317
-  # Secret with mTLS certs (ca.crt, tls.crt, tls.key) already on workload cluster
-  # from provider's onboarding template
-  certsSecret: ""                            # set when backend=btp
+  endpoint: ""                # e.g. ingest-otlp-….cloud.logs.services.sap.hana.ondemand.com:443
+  # Secret with ca.crt / tls.crt / tls.key already present in the release namespace.
+  certsSecret: ""
+  # BTP DNS returns multiple IPs; round_robin cycles past a stale one on reconnect.
+  balancer: round_robin
 
-# OpenSearch subchart — local storage, dev only.
-# backend=opensearch + opensearch.enabled=true  → in-cluster storage; exporter targets the subchart svc
-# backend=opensearch + opensearch.enabled=false → exporter targets opensearch.instanceEndpoint (external)
-# backend=btp         + opensearch.enabled=false → exporter targets BTP Cloud Logging
-opensearch:
-  enabled: true             # default ON in chart; prod explicitly sets enabled=false
-  singleNode: true
-  replicas: 1
-  persistence:
-    enabled: false          # ephemeral for kind; override for any persistence
-  resources:
-    requests: { memory: 1Gi, cpu: 500m }
-    limits:   { memory: 2Gi }
-  # upstream chart needs cluster manager role for multi-node; single-node works without
-  clusterManager:
-    enabled: false
-  sysctlInit:
-    enabled: false          # kind nodes don't allow sysctl tweaks; opensearch will warn but boot
-  # Kind lab: password comes from a k8s Secret at deploy time, not values.
-  # The local-setup script creates 'telemetry-opensearch-credentials' in the release
-  # namespace with opensearch-username/opensearch-password keys. Never in git.
-  extraEnvs:
-    - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: telemetry-opensearch-credentials
-          key: opensearch-password
-          optional: true    # tolerable on first render; btp path doesn't need it
+debugVerbosity: basic          # basic | normal | detailed | summary; "" disables the debug exporter
 
-## Sub-chart: opensearch-dashboards — visualization UI (kind-only)
-opensearch-dashboards:
-  # Enabled when: opensearch.enabled=true (local storage available).
-  # Prod sets both opensearch.enabled=false AND leaves this off.
-  enabled: true
-  # Chart reaches in-cluster opensearch via service name (fixed: opensearch-cluster-master)
-  opensearchHosts: "https://opensearch-cluster-master:9200"
-  # Admin credentials come from the same secret that the main opensearch instance uses
-  extraEnvs:
-    - name: OPENSEARCH_USERNAME
-      valueFrom:
-        secretKeyRef:
-          name: telemetry-opensearch-credentials
-          key: opensearch-username
-          optional: true
-    - name: OPENSEARCH_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: telemetry-opensearch-credentials
-          key: opensearch-password
-          optional: true
-  # Self-signed cert on local opensearch requires this
-  config:
-    opensearch_dashboards.yml: |
-      opensearch.ssl.verificationMode: none
-  resources:
-    requests: { memory: 512Mi, cpu: 100m }
-    limits:   { memory: 1Gi }
+## ─── Metric CRs (evaluated by the bundled metrics-operator) ─────────────────
+metrics:
+  enabled: true                # install DataSink + Metric CRs
+  interval: 1m
+  # Metric CRs target pods in `observedNamespace` — that value (top of file)
+  # is the one knob. More metrics (BacklogItems, …) get added to
+  # templates/metrics.yaml as the need shows up.
 
-## Sub-chart: opentelemetry-collector (upstream)
+## ─── Full config escape hatch ───────────────────────────────────────────────
+# If set, replaces the ENTIRE templated collector config (receivers/processors/
+# exporters/pipelines). Use when the backend switch can't express your wiring
+# (custom TLS, headers, extra processors, ...). All values above are ignored then.
+configOverride: ""
+
+## ─── Sub-chart: upstream opentelemetry-collector ────────────────────────────
 opentelemetry-collector:
+  # daemonset: one collector per node; k8sattributes sees same-node pods and filelog
+  # tails that node's /var/log/pods. Deployment+replicas breaks at 2+ nodes.
   mode: daemonset
+  # Pods restart when the override ConfigMap changes (e.g. backend switch). Without
+  # this helm upgrade leaves running pods on the old config until something else
+  # recreates them.
+  enableConfigChecksumAnnotation: true
+  # NOTE: sub-chart's config-checksum only watches its own default relay, which
+  # we disable via configmaps.create=false. Switching backend/observedNamespace
+  # in --set or providerconfig helmValues requires a manual:
+  #   kubectl rollout restart ds <release>-opentelemetry-collector-agent -n <ns>
+  # The sub-chart hashes the chart's own config, but we mount `telemetry-override` via
+  # configmaps.create=false. Hash the override content ourselves so pods roll when it
+  # changes (backend switch, observedNamespace, annotationKey, ...).
+  # no fullnameOverride: resources are named "<release>-opentelemetry-collector"
+  # consistently (service + daemonset + filelog self-exclusion glob all derive
+  # from the same subchart helper)
   image:
     repository: otel/opentelemetry-collector-contrib
-    # appVersion above pins collector 0.161.0
-  # BTP: cert volumes to mount when backend=btp (also set btp.certsSecret at deploy);
-  # kind/opensearch path leaves these empty.
-  extraVolumes: []
-  extraVolumeMounts: []
-  # Preset handles: filelog receiver setup, hostPath mounts for /var/log/pods,
-  # checkpoints, RBAC. We override receivers/processors via config instead.
-  presets:
-    logsCollection:
+  service:
+    enabled: true                    # ClusterIP for OTLP :4317 even in daemonset mode
+  ports:
+    otlp:
       enabled: true
-      includeCollectorLogs: false    # don't ingest the collector's own logs
-      storeCheckpoints: false        # kind lab: ephemeral; flip for prod durability
-  # Pass OpenSearch admin credentials into the collector — the basic auth extension
-  # in templates/collector-config.yaml uses ${env:OPENSEARCH_PASSWORD}.
-  extraEnvs:
-    - name: OPENSEARCH_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: telemetry-opensearch-credentials
-          key: opensearch-password
-          optional: true   # tolerated when backend=btp (no such secret expected)
-  # Use our templated ConfigMap (templates/collector-config.yaml) instead of
-  # values.yaml's static config block — we need namespace endpoint interpolation
+      hostPort: 0                    # hostPorts bypass kube-proxy (kindnet) — keep off
+    otlp-http:
+      enabled: true
+      hostPort: 0
+    # expose the always-on prometheus exporter through the Service so a
+    # Prometheus can scrape svc:8889 (and port-forward works) — without this
+    # entry the port exists only on the pods
+    metrics:
+      enabled: true
+      containerPort: 8889
+      servicePort: 8889
+      hostPort: 0
+      protocol: TCP
+  clusterRole:
+    create: true
+    rules:                           # k8s_attributes + hostmetrics requirements
+      - apiGroups: [""]
+        resources: [pods, namespaces, nodes]
+        verbs: [get, list, watch]
+      - apiGroups: ["apps"]
+        resources: [replicasets, deployments, daemonsets, statefulsets]
+        verbs: [get, list, watch]
+  # filelog needs host log mounts (logsCollection preset stays off — we template
+  # the receiver ourselves so observedNamespace renders into the glob).
+  # backend=btp additionally needs the certs volume — wire it in values you pass
+  # with `-f btp-values.yaml` (keeps base values backend-agnostic):
+  #   extraVolumes:
+  #     - { name: btp-certs, secret: { secretName: btp-otlp-credentials } }
+  #   extraVolumeMounts:
+  #     - { name: btp-certs, mountPath: /etc/ssl/certs/btp, readOnly: true }
+  extraVolumes:
+    - name: varlogpods
+      hostPath: { path: /var/log/pods }
+    - name: varlibdockercontainers
+      hostPath: { path: /var/lib/docker/containers }
+  extraVolumeMounts:
+    - { name: varlogpods, mountPath: /var/log/pods, readOnly: true }
+    - { name: varlibdockercontainers, mountPath: /var/lib/docker/containers, readOnly: true }
+  # Our templated ConfigMap (templates/collector-config.yaml) replaces the
+  # subchart's values-driven config entirely.
   configMap:
     create: false
     existingName: telemetry-override
-
-  # Expose OTLP receiver endpoints (4317 grpc / 4318 http) via a Service — even in
-  # daemonset mode. Lab apps on the host (app.py) port-forward to this. Without
-  # service.enabled, the agent is unreachable from outside the pod network.
-  service:
-    enabled: true
-  
-  # Upstream: clusterRole is top-level; the preset-driven RBAC entries
-  # come from the chart itself. We add k8sattributes-required rules.
-  clusterRole:
-    create: true
-    rules:
-      - apiGroups: [""]
-        resources: [pods, namespaces]
-        verbs: [get, list, watch]
-
   config:
-    # placeholder — the DaemonSet spec mounts the override ConfigMap above.
-    # Values.schema validation requires at least the health_check extension here.
-    # stretch: presets.logsCollection adds filelog receiver config, mounts, RBAC;
-    # our override ConfigMap applies the annotation filter on top.
+    # placeholder — subchart schema requires a config block; the DaemonSet mounts
+    # the override ConfigMap above, this is never read at runtime.
     extensions:
       health_check: {}
     service:
       extensions: [health_check]
       pipelines: {}
+
+## ─── Sub-chart: metrics-operator ────────────────────────────────────────────
+# The operator CAN self-install its CRDs at startup (ClusterRole grants it), but
+# Helm submits our DataSink/Metric CRs in the same apply batch — before the
+# operator pod is Running → "no matches for kind". So this chart pins the CRDs
+# in crds/ (copied from the operator repo @ the dependency tag); Helm installs
+# those first. When bumping the metrics-operator version, re-copy crds/.
+metrics-operator:
+  enabled: true
+  image:
+    repository: ghcr.io/openmcp-project/images/metrics-operator
+    tag: v1.2.1@sha256:5607bd49f3bdc28a90663794b12e95c39d3a036c48f5a72fe9e201150a3b7275
+  metrics:
+    service:
+      enabled: true
+      port: 8080
+      annotations:
+        prometheus.io/scrape: "true"
+  rbac:
+    create: true
+    # The operator itself ships rules for its own CRDs + core reads. Extra rules
+    # for the *target* resources of Metric CRs are appended by this chart in
+    # templates/metrics-operator-rbac.yaml (backlogitems rule behind metrics.backlogItem).
