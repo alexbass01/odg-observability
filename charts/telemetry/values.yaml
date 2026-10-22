@@ -41,6 +41,17 @@ metrics:
   # is the one knob. More metrics (BacklogItems, …) get added to
   # templates/metrics.yaml as the need shows up.
 
+## ─── Prometheus scrape integration (sibling chart) ──────────────────────────
+# When the sibling prometheus-operator chart is deployed, flip this on to make its
+# Prometheus scrape the otel-collector's :8889 exporter (hostmetrics + operator
+# gauges). Ships a ServiceMonitor labeled `app: prometheus` (the label the
+# Prometheus CR selects on). Requires the sub-chart metrics port to keep the name
+# `metrics` (see opentelemetry-collector.ports.metrics below).
+prometheus:
+  integration:
+    enabled: false
+    scrapeInterval: 15s
+
 ## ─── Full config escape hatch ───────────────────────────────────────────────
 # If set, replaces the ENTIRE templated collector config (receivers/processors/
 # exporters/pipelines). Use when the backend switch can't express your wiring
