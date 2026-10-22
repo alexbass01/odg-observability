@@ -35,6 +35,13 @@ resources:
       type: ociRegistry
       imageReference: ghcr.io/openmcp-project/images/metrics-operator:v1.2.1@sha256:5607bd49f3bdc28a90663794b12e95c39d3a036c48f5a72fe9e201150a3b7275
     relation: external
+  - name: alertmanager
+    version: v0.34.0
+    type: ociImage
+    access:
+      type: ociRegistry
+      imageReference: quay.io/prometheus/alertmanager:v0.34.0
+    relation: external
 labels:
   - name: odg.ocm.software/responsibles
     value:
