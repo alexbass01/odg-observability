@@ -77,12 +77,6 @@ kube-state-metrics:
 perses:
   enabled: false
 
-# Master switch for perses. When disabled, the entire perses-app block below and the
-# templates/perses{,-dashboards}.yaml manifests are skipped (the dashboard files under
-# dashboards/ become inert).
-perses:
-  enabled: false
-
 # perses subchart configuration (see https://artifacthub.io/packages/helm/perses/perses).
 # The vendored chart (charts/perses-*.tgz) carries the ODG patch applied by
 # scripts/patch-perses-chart.sh: the inline image assembly in statefulset.yaml is replaced

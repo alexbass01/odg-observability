@@ -10,17 +10,19 @@ copies it to `/etc/perses/provisioning/`, and perses applies it.
 Perses only loads provisioning **into** its file DB; it never exports back. That means
 **edits you save in the UI are overwritten by the committed file**:
 
-- perses applies provisioning at startup and every `config.provisioning.interval` (10m),
+- perses applies provisioning only on `config.provisioning.interval` (1m) — it does not
+  read the folder at startup even if files already exist (verified on a fresh deploy:
+  zero dashboards until the first tick),
 - and it overwrites whatever is in its DB with the on-disk version.
 
-So a UI edit survives at most ~10 minutes (or until the next pod restart).
+So a UI edit survives at most ~1 minute (or until the next pod restart).
 
 Workflow:
 
 ```
 1. Open the Perses UI, build/tweak your dashboard, save it. Iterate freely.
 
-2. When happy, export it before the 10m reset:
+2. When happy, export it before the `1m` reset (or restart the perses pod for a longer window):
      percli get dashboard <name> --project odg -o yaml > dashboards/<name>.yaml
 
    (or use the UI's YAML download button)
