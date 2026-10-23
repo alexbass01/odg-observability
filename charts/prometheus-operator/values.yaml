@@ -100,7 +100,7 @@ perses-app:
     # .ocm/base-component.yaml)
     registry: docker.io
     name: persesdev/perses
-    # version: defaults to the chart appVersion (v0.55.0 for chart 0.24.0)
+    # version: defaults to the chart appVersion (v0.54.0 for chart 0.23.3)
   # the sidecar watches ConfigMaps labeled perses.dev/resource: "true" in this namespace
   # and drops them into /etc/perses/provisioning, where perses picks them up (dashboards from
   # dashboards/*.yaml via templates/perses-dashboards.yaml, datasource in
@@ -115,7 +115,7 @@ perses-app:
       # contains a registry (i.e. the default below), the helper uses it verbatim, so keep
       # it in sync with the ociImage entry in .ocm/base-component.yaml.
       repository: docker.io/kiwigrid/k8s-sidecar
-      tag: 2.14.1
+      tag: 2.13.3
     resources:
       requests:
         memory: 64Mi
@@ -134,7 +134,10 @@ perses-app:
     provisioning:
       folders:
         - /etc/perses/provisioning
-      interval: 10m
+      # perses applies provisioning files on this interval; the sidecar copies ConfigMaps
+      # into the folder within ~1s, but perses doesn't watch the filesystem, so dashboards
+      # can only appear at this cadence (or on pod restart). 1m keeps first-boot UX usable.
+      interval: 1m
     security:
       enable_auth: false
       readonly: false

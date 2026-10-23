@@ -17,7 +17,7 @@ dependencies:
   #   helm pull perses/perses --version <version> -d charts/
   # then update the version below.
   - name: perses
-    version: 0.24.0
+    version: 0.23.3
     repository: https://perses.github.io/helm-charts
     # aliased so the vendored patch (scripts/patch-perses-chart.sh) can expose
     # OCM-compatible flat image keys under `perses-app:` without touching other values
