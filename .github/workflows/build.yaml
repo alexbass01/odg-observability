@@ -95,15 +95,14 @@ jobs:
           attribute: kube-state-metrics.image.repository
         - ref: ocm-resource:kube-state-metrics.tag
           attribute: kube-state-metrics.image.tag
-        # perses chart's values.schema.json rejects custom keys under `perses-app.image`
-        # (additionalProperties: false) and the subchart templates its image inline (no image
-        # helper to override from the parent like kube-state-metrics has), so we cannot
-        # route OCM's flat `host/path/image` repository string in: the subchart would prefix
-        # it with a registry host again. Map tags only; registry/name stay at the docker.io
-        # defaults below, which match the ociImage resource references in
-        # .ocm/base-component.yaml. If these images ever get relocated to another registry,
-        # add equivalent keys to the subchart (or vendor and patch it).
+        # perses is vendored with our patch (scripts/patch-perses-chart.sh) that swaps the
+        # inline image assembly for `perses-app.image` / `perses-app.sidecar.image` helpers
+        # consuming the flat `host/path/image` format, like the other images in this chart
+        - ref: ocm-resource:perses.repository
+          attribute: perses-app.image.repository
         - ref: ocm-resource:perses.tag
-          attribute: perses-app.image.version
+          attribute: perses-app.image.tag
+        - ref: ocm-resource:k8s-sidecar.repository
+          attribute: perses-app.sidecar.image.repository
         - ref: ocm-resource:k8s-sidecar.tag
           attribute: perses-app.sidecar.image.tag
