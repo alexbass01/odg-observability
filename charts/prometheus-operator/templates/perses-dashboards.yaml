@@ -1,3 +1,4 @@
+{{- if .Values.perses.enabled }}
 # One ConfigMap per dashboard file in dashboards/. The perses sidecar loads any ConfigMap
 # labeled perses.dev/resource: "true" into /etc/perses/provisioning, so dashboards join the
 # "prometheus" datasource (templates/perses.yaml) as provisioning. File name must match the
@@ -15,4 +16,5 @@ metadata:
 data:
   {{ base $path }}: |
 {{ $.Files.Get $path | indent 4 }}
+{{- end }}
 {{- end }}

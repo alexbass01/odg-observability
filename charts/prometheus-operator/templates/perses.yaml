@@ -1,3 +1,4 @@
+{{- if .Values.perses.enabled }}
 # Prometheus datasource and network policies for the perses subchart.
 
 # Dashboards/datasources are provisioned via ConfigMaps labeled
@@ -63,3 +64,4 @@ spec:
     - ports:
         - protocol: TCP
           port: 8080
+{{- end }}

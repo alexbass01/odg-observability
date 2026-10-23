@@ -20,6 +20,7 @@ dependencies:
     version: 0.23.3
     repository: https://perses.github.io/helm-charts
     # the subchart's values.schema.json rejects our release-time `image.repository`/`image.tag`
-    # keys, so we wire the values under an alias and pass them through explicitly (see
-    # `perses:` in values.yaml)
+    # keys, so we use the alias to scope its values under `perses-app:`
     alias: perses-app
+    # master switch: values.yaml `perses.enabled`
+    condition: perses.enabled
