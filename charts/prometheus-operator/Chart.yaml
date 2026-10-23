@@ -11,3 +11,15 @@ dependencies:
   - name: kube-state-metrics
     version: 8.6.0
     repository: oci://ghcr.io/prometheus-community/charts
+  # subchart .tgz is vendored under charts/ (committed); to bump:
+  #   rm charts/perses-*.tgz
+  #   helm repo add perses https://perses.github.io/helm-charts && helm repo update
+  #   helm pull perses/perses --version <version> -d charts/
+  # then update the version below.
+  - name: perses
+    version: 0.23.3
+    repository: https://perses.github.io/helm-charts
+    # the subchart's values.schema.json rejects our release-time `image.repository`/`image.tag`
+    # keys, so we wire the values under an alias and pass them through explicitly (see
+    # `perses:` in values.yaml)
+    alias: perses-app

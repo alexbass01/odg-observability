@@ -69,3 +69,55 @@ kube-state-metrics:
     - replicasets
     - jobs
     - cronjobs
+
+# perses subchart configuration (see https://artifacthub.io/packages/helm/perses/perses).
+# The subchart is referenced with the alias `perses-app` in Chart.yaml because its
+# values.schema.json rejects the release-time keys the other images in this chart use
+# (image.repository / image.tag as a flat "host/path/image" + tag). Unlike the other images,
+# the subchart templates its image inline (no image helper the parent could override like it
+# does for kube-state-metrics), so we cannot inject OCM's flat "host/path/image" repository —
+# only the tags are remapped (see .github/workflows/build.yaml ocm-mappings).
+perses-app:
+  image:
+    # keep these matching the subchart defaults; OCM relocation only overwrites the tag
+    # (defaults match the ociImage entries in .ocm/base-component.yaml)
+    registry: docker.io
+    name: persesdev/perses
+    # version: defaults to the chart appVersion (v0.54.0 for chart 0.23.3); overwritten by OCM
+  # the sidecar watches ConfigMaps labeled perses.dev/resource: "true" in this namespace
+  # and drops them into /etc/perses/provisioning, where perses picks them up (dashboards from
+  # dashboards/*.yaml via templates/perses-dashboards.yaml, datasource in
+  # templates/perses.yaml); the chart is CRD-less — PersesDashboard CRDs belong to the
+  # separate perses-operator project
+  sidecar:
+    enabled: true
+    # only watch our own namespace
+    allNamespaces: false
+    image:
+      # defaults match the subchart; OCM relocation only overwrites the tag
+      registry: docker.io
+      repository: kiwigrid/k8s-sidecar
+      tag: 2.13.3  # overwritten by OCM
+
+  # labels on the Service so our own ServiceMonitor (templates/servicemonitors.yaml)
+  # can select it
+  service:
+    labels:
+      monitoring: prometheus
+  # perses is stateful: dashboards/datasources live in a file DB on a PVC
+  persistence:
+    enabled: true
+  config:
+    provisioning:
+      folders:
+        - /etc/perses/provisioning
+      interval: 10m
+    security:
+      enable_auth: false
+      readonly: false
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 50m
+    limits:
+      memory: 512Mi

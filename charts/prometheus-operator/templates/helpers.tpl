@@ -10,6 +10,7 @@
 {{- end -}}
 {{- end -}}
 
+
 {{/*
 Override kube-state-metrics subchart image helper so OCM relocation uses the same flat
 repository:tag format as the other images in this chart, instead of KSM's registry/repository:tag
