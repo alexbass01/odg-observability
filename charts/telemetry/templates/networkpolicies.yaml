@@ -46,6 +46,15 @@ spec:
         - ipBlock: { cidr: 10.0.0.0/8 }
         - ipBlock: { cidr: 172.16.0.0/12 }
         - ipBlock: { cidr: 192.168.0.0/16 }
+{{- if eq .Values.backend "btp" }}
+    # BTP Cloud Logging ingest-otlp endpoint is public-facing. Its IPs rotate
+    # (SAP CLS is multi-region); only TCP/443 is needed. DNS stays covered by the
+    # private-CIDR rule above (kube-dns is in-cluster).
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0 }
+      ports:
+        - { port: 443, protocol: TCP }
+{{- end }}
 {{- if .Values.metrics.enabled }}
 ---
 apiVersion: networking.k8s.io/v1

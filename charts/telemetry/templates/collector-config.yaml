@@ -89,7 +89,9 @@ data:
         endpoint: "0.0.0.0:8889"
         resource_to_telemetry_conversion:
           enabled: true
-      {{- if .Values.debugVerbosity }}
+      {{- if and .Values.debugVerbosity (eq .Values.backend "debug") }}
+      # debug exporter only when backend=debug: when pushing to btp/opensearch,
+      # those exporters are the destination, debug output is noise.
       debug:
         verbosity: {{ .Values.debugVerbosity }}
       {{- end }}
@@ -111,7 +113,8 @@ data:
           ca_file: /etc/ssl/certs/btp/ca.crt
           cert_file: /etc/ssl/certs/btp/tls.crt
           key_file: /etc/ssl/certs/btp/tls.key
-        balancer_name: {{ .Values.btp.balancer | default "round_robin" }}
+        # BTP DNS returns multiple IPs; round_robin cycles past a stale one on reconnect.
+        balancer_name: round_robin
       {{- end }}
 
     service:
@@ -135,7 +138,7 @@ data:
             {{- else if eq .Values.backend "btp" }}
             - otlp/btp
             {{- end }}
-            {{- if .Values.debugVerbosity }}
+            {{- if and .Values.debugVerbosity (eq .Values.backend "debug") }}
             - debug
             {{- end }}
 
@@ -148,19 +151,18 @@ data:
             {{- else if eq .Values.backend "btp" }}
             - otlp/btp
             {{- end }}
-            {{- if .Values.debugVerbosity }}
+            {{- if and .Values.debugVerbosity (eq .Values.backend "debug") }}
             - debug
             {{- end }}
 
         metrics:
           receivers: [otlp, hostmetrics]
           processors: [memory_limiter, batch]
+          # metrics always go to the in-cluster Prometheus exporter; never pushed
+          # to BTP/OpenSearch (their logs/traces indices are not the right shape).
           exporters:
             - prometheus
-            {{- if eq .Values.backend "btp" }}
-            - otlp/btp
-            {{- end }}
-            {{- if .Values.debugVerbosity }}
+            {{- if and .Values.debugVerbosity (eq .Values.backend "debug") }}
             - debug
             {{- end }}
     {{- end }}

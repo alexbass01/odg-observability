@@ -20,13 +20,14 @@ resources:
     access:
       type: ociRegistry
       imageReference: quay.io/prometheus-operator/prometheus-config-reloader:v0.94.1
+    relation: external
 
   - name: opentelemetry-collector-contrib
-    version: 0.161.0
+    version: 0.163.2
     type: ociImage
     access:
       type: ociRegistry
-      imageReference: docker.io/otel/opentelemetry-collector-contrib:0.161.0
+      imageReference: docker.io/otel/opentelemetry-collector-contrib:0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849
     relation: external
   - name: metrics-operator
     version: v1.2.1

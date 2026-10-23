@@ -49,9 +49,20 @@ installation:
       value: ${telemetry_backend}
       value_type: python-string-template
       default: debug
+    - helm_chart_name: telemetry
+      helm_attribute: opensearch.endpoint
+      value: ${opensearch_endpoint}
+      value_type: python-string-template
+      default: ""
+    - helm_chart_name: telemetry
+      helm_attribute: btp.endpoint
+      value: ${btp_endpoint}
+      value_type: python-string-template
+      default: ""
+    - helm_chart_name: telemetry
+      helm_attribute: btp.certsSecret
+      value: ${btp_certs_secret}
+      value_type: python-string-template
+      default: ""
 outputs: []
 dependencies: []
-
----
-
-1:1 Eintrag: telemetry 

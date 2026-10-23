@@ -20,6 +20,9 @@ annotationKey: otel.io/pod-logs
 backend: debug
 
 opensearch:
+  # No auth/TLS support yet — only reachable, unauthenticated endpoints work.
+  # Add user/passwordSecret here (pattern: btp.certsSecret) when a real
+  # authenticated OpenSearch shows up.
   endpoint: ""                # e.g. http://host.docker.internal:9200
   logsIndex: logs-otel-v1
   tracesIndex: traces-otel-v1
@@ -27,9 +30,10 @@ opensearch:
 btp:
   endpoint: ""                # e.g. ingest-otlp-….cloud.logs.services.sap.hana.ondemand.com:443
   # Secret with ca.crt / tls.crt / tls.key already present in the release namespace.
+  # Also mount it via extraVolumes/extraVolumeMounts below — chart does not do
+  # this automatically because extraVolumes is a plain values list and conditional
+  # extension of list values is not possible without helper hackery.
   certsSecret: ""
-  # BTP DNS returns multiple IPs; round_robin cycles past a stale one on reconnect.
-  balancer: round_robin
 
 debugVerbosity: basic          # basic | normal | detailed | summary; "" disables the debug exporter
 
@@ -79,6 +83,7 @@ opentelemetry-collector:
   # from the same subchart helper)
   image:
     repository: otel/opentelemetry-collector-contrib
+    tag: 0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849
   service:
     enabled: true                    # ClusterIP for OTLP :4317 even in daemonset mode
   ports:
@@ -108,12 +113,11 @@ opentelemetry-collector:
         verbs: [get, list, watch]
   # filelog needs host log mounts (logsCollection preset stays off — we template
   # the receiver ourselves so observedNamespace renders into the glob).
-  # backend=btp additionally needs the certs volume — wire it in values you pass
-  # with `-f btp-values.yaml` (keeps base values backend-agnostic):
-  #   extraVolumes:
-  #     - { name: btp-certs, secret: { secretName: btp-otlp-credentials } }
-  #   extraVolumeMounts:
-  #     - { name: btp-certs, mountPath: /etc/ssl/certs/btp, readOnly: true }
+  # Values here are the fallback when ODG's installer does NOT override
+  # extraVolumes/extraVolumeMounts — see ../../../../extension-definitions.yaml
+  # (the operator SETs extraVolumes including btp-certs when context.btp_certs_secret
+  # is non-empty; otherwise it SETs the varlog mounts only). Both paths must
+  # include the host log mounts for filelog to work.
   extraVolumes:
     - name: varlogpods
       hostPath: { path: /var/log/pods }
