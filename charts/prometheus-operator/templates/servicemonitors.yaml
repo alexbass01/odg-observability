@@ -77,7 +77,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      monitoring: prometheus
+      monitoring: perses
   endpoints:
     - port: http
       interval: {{ default "15s" .Values.scrapeInterval }}

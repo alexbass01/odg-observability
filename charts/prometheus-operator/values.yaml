@@ -120,7 +120,7 @@ perses-app:
   # can select it
   service:
     labels:
-      monitoring: prometheus
+      monitoring: perses
   # perses is stateful: dashboards/datasources live in a file DB on a PVC
   persistence:
     enabled: true
