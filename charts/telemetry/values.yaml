@@ -29,11 +29,13 @@ opensearch:
 
 btp:
   endpoint: ""                # e.g. ingest-otlp-….cloud.logs.services.sap.hana.ondemand.com:443
-  # Secret with ca.crt / tls.crt / tls.key already present in the release namespace.
-  # Also mount it via extraVolumes/extraVolumeMounts below — chart does not do
-  # this automatically because extraVolumes is a plain values list and conditional
-  # extension of list values is not possible without helper hackery.
-  certsSecret: ""
+  # Name of the Secret (ca.crt / tls.crt / tls.key) the collector mounts at
+  # /etc/ssl/certs/btp when backend=btp. Values-only plumbing can't reach the
+  # volume list (see opentelemetry-collector.extraVolumes), so this block is
+  # documentation: whoever flips backend=btp creates the secret under the
+  # STABLE name `btp-certs` in the release namespace. optional:true on the
+  # volume keeps the daemonset alive for other backends.
+  certsSecret: btp-certs
 
 debugVerbosity: basic          # basic | normal | detailed | summary; "" disables the debug exporter
 
@@ -114,18 +116,31 @@ opentelemetry-collector:
   # filelog needs host log mounts (logsCollection preset stays off — we template
   # the receiver ourselves so observedNamespace renders into the glob).
   # Values here are the fallback when ODG's installer does NOT override
-  # extraVolumes/extraVolumeMounts — see ../../../../extension-definitions.yaml
-  # (the operator SETs extraVolumes including btp-certs when context.btp_certs_secret
-  # is non-empty; otherwise it SETs the varlog mounts only). Both paths must
-  # include the host log mounts for filelog to work.
+  # extraVolumes/extraVolumeMounts. They are strings — the collector subchart
+  # templates them back to YAML — so we CAN conditionally add the btp-certs
+  # Secret when backend=btp and btp.certsSecret is set. ODG's installer does
+  # not need per-backend branching anymore.
+  # extraVolumes must stay a plain list (subchart schema), so the btp-certs
+  # volume is always declared with optional:true. secretName is NOT hardcoded:
+  # the subchart pipes entries through tpl, so the btp.certsSecret value above
+  # is interpolated here.
   extraVolumes:
     - name: varlogpods
       hostPath: { path: /var/log/pods }
     - name: varlibdockercontainers
       hostPath: { path: /var/lib/docker/containers }
+    - name: btp-certs
+      secret:
+        # Stable name. The subchart tpl's .Values can't see this parent
+        # chart's btp.* block, so a configurable name isn't possible from
+        # values alone. Whoever enables backend=btp creates the secret with
+        # this name in the release namespace.
+        secretName: btp-certs
+        optional: true
   extraVolumeMounts:
     - { name: varlogpods, mountPath: /var/log/pods, readOnly: true }
     - { name: varlibdockercontainers, mountPath: /var/lib/docker/containers, readOnly: true }
+    - { name: btp-certs, mountPath: /etc/ssl/certs/btp, readOnly: true }
   # Our templated ConfigMap (templates/collector-config.yaml) replaces the
   # subchart's values-driven config entirely.
   configMap:

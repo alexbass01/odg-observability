@@ -59,10 +59,9 @@ installation:
       value: ${btp_endpoint}
       value_type: python-string-template
       default: ""
-    - helm_chart_name: telemetry
-      helm_attribute: btp.certsSecret
-      value: ${btp_certs_secret}
-      value_type: python-string-template
-      default: ""
+    # btp_certs_secret intentionally NOT mapped: the telemetry chart mounts the
+    # cert Secret under the stable name `btp-certs` (see its values.yaml). The
+    # context variable stays in the odg.yaml schema; the installer creates the
+    # Secret with that name when backend=btp is requested.
 outputs: []
 dependencies: []
