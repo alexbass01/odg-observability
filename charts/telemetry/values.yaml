@@ -161,4 +161,5 @@ metrics-operator:
     create: true
     # The operator itself ships rules for its own CRDs + core reads. Extra rules
     # for the *target* resources of Metric CRs are appended by this chart in
-    # templates/metrics-operator-rbac.yaml (backlogitems rule behind metrics.backlogItem).
+    # templates/metrics-operator-rbac.yaml (backlogitems rule when a Metric CR
+    # targets them).
