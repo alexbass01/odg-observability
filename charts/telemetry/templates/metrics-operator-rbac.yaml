@@ -1,0 +1,33 @@
+# RBAC so the bundled metrics-operator can read backlogitems when Metric CRs
+# target them. BacklogItem ships with ODG core (odg-core
+# charts/extensions/crds/backlog-item.yaml, scope: Namespaced) in the ODG
+# target namespace — the same namespace this chart observes — so the Role
+# always goes there and no feature flag is required.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: metrics-operator-backlogitems
+  namespace: {{ .Values.observedNamespace }}
+  labels:
+    {{- include "telemetry.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["delivery-gear.gardener.cloud"]
+    resources: ["backlogitems"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: metrics-operator-backlogitems
+  namespace: {{ .Values.observedNamespace }}
+  labels:
+    {{- include "telemetry.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: metrics-operator-backlogitems
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-metrics-operator
+    namespace: {{ .Release.Namespace }}
