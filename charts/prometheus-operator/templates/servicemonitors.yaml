@@ -65,7 +65,7 @@ spec:
   endpoints:
     - port: web
       interval: {{ default "15s" .Values.scrapeInterval }}
-{{- if .Values.perses.enabled }}
+{{- if index .Values "perses-app" "enabled" }}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor

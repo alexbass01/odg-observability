@@ -21,5 +21,10 @@ installation:
       value: ${alertmanagerEnabled}
       value_type: python-string-template
       default: false
+    - helm_chart_name: prometheus-operator
+      helm_attribute: perses-app.enabled
+      value: ${persesEnabled}
+      value_type: python-string-template
+      default: false
 outputs: []
 dependencies: []

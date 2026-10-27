@@ -22,5 +22,6 @@ dependencies:
     # aliased so the vendored patch (scripts/patch-perses-chart.sh) can expose
     # OCM-compatible flat image keys under `perses-app:` without touching other values
     alias: perses-app
-    # master switch: values.yaml `perses.enabled`
-    condition: perses.enabled
+    # master switch: values.yaml `perses-app.enabled` (declared in the vendored schema
+    # by scripts/patch-perses-chart.sh, since the subchart validates parent values)
+    condition: perses-app.enabled

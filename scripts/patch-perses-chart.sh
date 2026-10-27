@@ -55,8 +55,13 @@ img.setdefault('repository', {'type': ['string', 'null']})
 img.setdefault('tag', {'type': ['string', 'null']})
 sc_img = schema['properties']['sidecar']['properties']['image']['properties']
 # sidecar already has flat-ish repository/tag; nothing to add
+# enabled: not part of upstream values; the parent chart's master switch
+# (perses-app.enabled, Chart.yaml condition) is validated against this schema,
+# which is additionalProperties: false, so the vendored chart must declare it
+assert schema.get('additionalProperties') is False, 'upstream schema changed — review manually'
+schema.setdefault('properties', {})['enabled'] = {'type': 'boolean'}
 json.dump(schema, open(p, 'w'), indent=2)
-print('schema: image.repository/image.tag allowed')
+print('schema: image.repository/image.tag allowed, enabled declared')
 PYEOF
 
 # --- 3. helpers/_odg.tpl

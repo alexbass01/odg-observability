@@ -5,7 +5,7 @@ Umbrella chart for the ODG observability stack:
 - **prometheus-operator** (templated here, CRDs under `crds/`)
 - **kube-state-metrics** (vendored subchart, `charts/kube-state-metrics-*.tgz`)
 - **perses** (vendored subchart, `charts/perses-*.tgz`, aliased `perses-app`) — dashboards UI
-  - `perses.enabled: false` by default in values.yaml
+  - `perses-app.enabled: false` by default in values.yaml
 
 Perses is installed without its operator: it has no CRDs; dashboards and datasources are
 plain ConfigMaps labeled `perses.dev/resource: "true"` in the release namespace, which the

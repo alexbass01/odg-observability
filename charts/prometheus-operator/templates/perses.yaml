@@ -1,4 +1,4 @@
-{{- if .Values.perses.enabled }}
+{{- if index .Values "perses-app" "enabled" }}
 # Prometheus datasource and network policies for the perses subchart.
 
 # Dashboards/datasources are provisioned via ConfigMaps labeled

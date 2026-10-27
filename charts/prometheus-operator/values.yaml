@@ -70,13 +70,6 @@ kube-state-metrics:
     - jobs
     - cronjobs
 
-# Master switch for perses. When disabled, the entire perses-app block below and the
-# templates/perses{,-dashboards}.yaml manifests are skipped (the dashboard files under
-# dashboards/ become inert). Enable after first installing with CRDs, since its
-# ServiceMonitor targets CRDs from crds/.
-perses:
-  enabled: false
-
 # perses subchart configuration (see https://artifacthub.io/packages/helm/perses/perses).
 # The vendored chart (charts/perses-*.tgz) carries the ODG patch applied by
 # scripts/patch-perses-chart.sh: the inline image assembly in statefulset.yaml is replaced
@@ -85,6 +78,10 @@ perses:
 # relocation); when empty the chart's registry/name/version defaults apply.
 # Re-run the script after every perses chart bump (Renovate postUpgradeTask).
 perses-app:
+  # Master switch. When disabled, templates/perses{,-dashboards}.yaml and the perses
+  # ServiceMonitor are skipped (the dashboard files under dashboards/ become inert).
+  # Enable after first installing with CRDs, since its ServiceMonitor targets CRDs from crds/.
+  enabled: false
   image:
     # image property will be set during release (flat "host/path/image" + tag, like the
     # other images in this chart)
