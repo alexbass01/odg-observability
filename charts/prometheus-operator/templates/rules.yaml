@@ -73,3 +73,20 @@ spec:
           annotations:
             summary: Pod container waiting longer than 1 hour.
             description: 'pod/{{ "{{" }} $labels.pod {{ "}}" }} in namespace {{ "{{" }} $labels.namespace {{ "}}" }} on container {{ "{{" }} $labels.container {{ "}}" }} has been in waiting state for longer than 1 hour. (reason: "{{ "{{" }} $labels.reason {{ "}}" }}")'
+
+    - name: kubernetes-volumes
+      rules:
+        - alert: KubePersistentVolumeClaimUsageHigh
+          # Source: kubeletstats receiver (OTel collector daemonset), needs
+          # metric_groups incl. volume + extra_metadata_labels [k8s.volume.type].
+          # Label value is "persistentVolumeClaim" (case-sensitive).
+          expr: |-
+            k8s_volume_available_bytes{k8s_volume_type="persistentVolumeClaim"}
+              /
+            k8s_volume_capacity_bytes{k8s_volume_type="persistentVolumeClaim"} < 0.2
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: PVC usage above 80%.
+            description: 'PVC {{ "{{" }} $labels.k8s_namespace_name {{ "}}" }}/{{ "{{" }} $labels.k8s_persistentvolumeclaim_name {{ "}}" }} (pod {{ "{{" }} $labels.k8s_pod_name {{ "}}" }}) has {{ "{{" }} $value | humanizePercentage {{ "}}" }} free space left.'

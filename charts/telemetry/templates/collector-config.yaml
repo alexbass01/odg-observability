@@ -64,6 +64,9 @@ data:
         endpoint: "${env:OTEL_K8S_NODE_IP}:10250"
         insecure_skip_verify: true
         extra_metadata_labels: [k8s.volume.type]
+        # Default groups are container/pod/node. Add volume for k8s.volume.*
+        # (PVC usage alert in prometheus-operator/templates/rules.yaml).
+        metric_groups: [container, pod, node, volume]
         metrics:
           k8s.pod.cpu_limit_utilization: { enabled: true }
           k8s.pod.cpu_request_utilization: { enabled: true }
