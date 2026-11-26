@@ -51,6 +51,22 @@ spec:
       ports:
         - { port: 53, protocol: UDP }
         - { port: 53, protocol: TCP }
+{{- if .Values.gardener.enabled }}
+    # Gardener: node-local DNS cache runs at 169.254.20.10 on each node and
+    # listens on ports 8053 (UDP/TCP) and 5353. Cilium requires these to be
+    # listed explicitly; the 0.0.0.0/0 rule above does not cover them because
+    # Cilium classifies the link-local address separately.
+    - to:
+        - ipBlock: { cidr: 169.254.20.10/32 }
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { port: 8053, protocol: UDP }
+        - { port: 8053, protocol: TCP }
+        - { port: 5353, protocol: UDP }
+        - { port: 5353, protocol: TCP }
+{{- end }}
     # kube-apiserver (k8sattributes processor): gardener injects
     # KUBERNETES_SERVICE_HOST=api.<shoot>.<project>.internal... into every pod,
     # which may resolve to a non-private LB IP. Allow :443 explicitly.
@@ -58,6 +74,13 @@ spec:
         - ipBlock: { cidr: 0.0.0.0/0 }
       ports:
         - { port: 443, protocol: TCP }
+{{- if .Values.gardener.enabled }}
+    # Gardener shoot clusters expose the apiserver on 6443, not 443.
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0 }
+      ports:
+        - { port: 6443, protocol: TCP }
+{{- end }}
 {{- if eq .Values.backend "opensearch" }}
     # opensearch backend: endpoint is typically a svc DNS name
     # (opensearch-*.svc.cluster.local:9200) whose ClusterIP sits in a
@@ -128,6 +151,19 @@ spec:
       ports:
         - { port: 53, protocol: UDP }
         - { port: 53, protocol: TCP }
+{{- if .Values.gardener.enabled }}
+    # Gardener: node-local DNS cache (see agent policy above for details).
+    - to:
+        - ipBlock: { cidr: 169.254.20.10/32 }
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { port: 8053, protocol: UDP }
+        - { port: 8053, protocol: TCP }
+        - { port: 5353, protocol: UDP }
+        - { port: 5353, protocol: TCP }
+{{- end }}
     # kube-apiserver is the k8s_cluster receiver's only target. Gardener
     # injects KUBERNETES_SERVICE_HOST=api.<shoot>.<project>.internal... into
     # every pod, so the apiserver is reached via that DNS name on 443, which
@@ -136,6 +172,13 @@ spec:
         - ipBlock: { cidr: 0.0.0.0/0 }
       ports:
         - { port: 443, protocol: TCP }
+{{- if .Values.gardener.enabled }}
+    # Gardener shoot clusters expose the apiserver on 6443, not 443.
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0 }
+      ports:
+        - { port: 6443, protocol: TCP }
+{{- end }}
 {{- end }}
 {{- if .Values.metrics.enabled }}
 ---
@@ -154,4 +197,32 @@ spec:
   policyTypes: [Egress]
   egress:
     - {}   # any: SAP service CIDRs are not RFC1918-stable (gardener/BTP vary)
+{{- end }}
+{{- if and .Values.otelMetrics.enabled .Values.gardener.enabled }}
+---
+# Gardener/Cilium: node IPs (10.x.x.x) are classified as remote-node entities
+# by Cilium when policy-cidr-match-mode=nodes. Standard NetworkPolicy ipBlock
+# rules only match world traffic and silently skip remote-node — kubeletstats
+# times out without this. toEntities: [host, remote-node] covers both the local
+# node kubelet and kubelets on other nodes.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-otel-agent-to-kubelet
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "telemetry.labels" . | nindent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: opentelemetry-collector
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  egress:
+  - toEntities:
+    - host
+    - remote-node
+    toPorts:
+    - ports:
+      - port: "10250"
+        protocol: TCP
 {{- end }}

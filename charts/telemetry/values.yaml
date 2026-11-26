@@ -70,6 +70,19 @@ otelMetrics:
   # Poll interval for both receivers
   collectionInterval: 30s
 
+## ─── Gardener-specific settings ─────────────────────────────────────────────
+# Set gardener.enabled=true on Gardener shoot clusters. Enables:
+#   - Pod labels networking.gardener.cloud/to-kubelet and to-apiserver (required
+#     by shoot-networking-filter to allow egress to node IPs and the apiserver).
+#   - DNS egress rules for node-local DNS cache (169.254.20.10, ports 8053/5353)
+#     and explicit kube-system namespace selector (Cilium requires these).
+#   - Port 6443 alongside 443 for apiserver egress (Gardener uses 6443).
+#   - CiliumNetworkPolicy allowing the agent to reach kubelet on port 10250 via
+#     the remote-node entity (Cilium policy-cidr-match-mode: nodes classifies
+#     node IPs as remote-node, not world; standard ipBlock rules skip them).
+gardener:
+  enabled: false
+
 ## ─── Prometheus scrape integration (sibling chart) ──────────────────────────
 # When the sibling prometheus-operator chart is deployed, flip this on to make its
 # Prometheus scrape the otel-collector's :8889 exporter (hostmetrics + operator
@@ -107,6 +120,9 @@ opentelemetry-collector:
   image:
     repository: otel/opentelemetry-collector-contrib
     tag: 0.163.2
+  podLabels:
+    networking.gardener.cloud/to-kubelet: "allowed"
+    networking.gardener.cloud/to-apiserver: "allowed"
   service:
     enabled: true                    # ClusterIP for OTLP :4317 even in daemonset mode
   ports:
@@ -192,6 +208,15 @@ opentelemetry-collector-cluster:
   image:
     repository: otel/opentelemetry-collector-contrib
     tag: 0.163.2
+  podLabels:
+    networking.gardener.cloud/to-apiserver: "allowed"
+  # k8sClusterReceiver does a WaitForCacheSync (up to 30s) before the first
+  # reconciliation. Without a startup delay the default liveness probe
+  # (failureThreshold=3, period=10s) kills the pod at 30s — before sync completes.
+  livenessProbe:
+    initialDelaySeconds: 60
+  readinessProbe:
+    initialDelaySeconds: 60
   service:
     enabled: true
   # Only the prometheus exporter listens here; turn off the subchart's default
