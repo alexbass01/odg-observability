@@ -81,7 +81,7 @@ otelMetrics:
 #     the remote-node entity (Cilium policy-cidr-match-mode: nodes classifies
 #     node IPs as remote-node, not world; standard ipBlock rules skip them).
 gardener:
-  enabled: false
+  enabled: true
 
 ## ─── Prometheus scrape integration (sibling chart) ──────────────────────────
 # When the sibling prometheus-operator chart is deployed, flip this on to make its
