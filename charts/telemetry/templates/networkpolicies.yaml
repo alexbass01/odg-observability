@@ -58,10 +58,20 @@ spec:
     # Cilium classifies the link-local address separately.
     - to:
         - ipBlock: { cidr: 169.254.20.10/32 }
+      ports:
+        - { port: 8053, protocol: UDP }
+        - { port: 8053, protocol: TCP }
+        - { port: 5353, protocol: UDP }
+        - { port: 5353, protocol: TCP }
+    # kube-dns ClusterIP (kube-system) also needs 8053/5353 for node-local DNS
+    # forwarding; Cilium namespace selectors require an explicit rule.
+    - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
       ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
         - { port: 8053, protocol: UDP }
         - { port: 8053, protocol: TCP }
         - { port: 5353, protocol: UDP }
@@ -155,10 +165,18 @@ spec:
     # Gardener: node-local DNS cache (see agent policy above for details).
     - to:
         - ipBlock: { cidr: 169.254.20.10/32 }
+      ports:
+        - { port: 8053, protocol: UDP }
+        - { port: 8053, protocol: TCP }
+        - { port: 5353, protocol: UDP }
+        - { port: 5353, protocol: TCP }
+    - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
       ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
         - { port: 8053, protocol: UDP }
         - { port: 8053, protocol: TCP }
         - { port: 5353, protocol: UDP }
